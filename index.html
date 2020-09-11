@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Hello World</title></head
+  ><style>
+    * {
+      padding: 0;
+      margin: 0;
+    }
+  </style>
+  <script src="pixi.js"></script>
+  <body>
+    <script type="text/javascript">
+      PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.NEAREST;
+
+      let app = new PIXI.Application({
+        antialias: true,
+        transparent: false,
+      });
+      app.renderer.view.style.position = "absolute";
+      app.renderer.view.style.display = "block";
+      app.renderer.autoResize = true;
+      app.renderer.resize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(app.view);
+      app.view.setAttribute("tabindex", 0);
+
+      app.loader.add("tileset", "images/character and tileset/Dungeon_Tileset.png");
+      app.loader.add("character", "images/character and tileset/Dungeon_Character_2.png");
+
+      app.loader.on("progress", loadProgressHandler);
+      app.loader.load(setup);
+      function loadProgressHandler(loader, resource) {
+        console.log("loading: " + resource.url);
+        console.log("progress: " + loader.progress + "%");
+      }
+
+      const map = {
+        width: 20,
+        height: 20,
+      };
+      let character;
+      const tileSize = 16;
+      const SCALE = 5;
+      let tileTextures = [];
+      const speed = 2;
+      let chests = new PIXI.Container();
+      const maxSpeed = 8;
+      class Keyboard {
+        constructor() {
+          this.pressed = {};
+        }
+
+        watch(el) {
+          el.addEventListener("keydown", (e) => {
+            this.pressed[e.key] = true;
+          });
+          el.addEventListener("keyup", (e) => {
+            this.pressed[e.key] = false;
+          });
+        }
+      }
+      function genMaze() {
+        let maps = [];
+        let check = [];
+        let temp = [];
+        let dirs = [
+          [-1, 0],
+          [0, 1],
+          [1, 0],
+          [0, -1],
+        ];
+        for (let i = 0; i < map.width * 2 + 1; i++) temp.push(true);
+        for (let i = 0; i < map.height * 2 + 1; i++) check.push([...temp]);
+
+        for (let i = 0; i < map.height * 2 + 1; i++) {
+          temp = [];
+          for (let j = 0; j < map.width * 2 + 1; j++)
+            if ((i * j) % 2) temp.push(getRandomFloor());
+            else temp.push(2);
+          maps.push([...temp]);
+        }
+        function shuffle(array) {
+          var currentIndex = array.length,
+            temporaryValue,
+            randomIndex;
+          while (0 !== currentIndex) {
+            randomIndex = Math.floor(Math.random() * currentIndex);
+            currentIndex -= 1;
+            temporaryValue = array[currentIndex];
+            array[currentIndex] = array[randomIndex];
+            array[randomIndex] = temporaryValue;
+          }
+
+          return array;
+        }
+
+        function dfs(x, y) {
+          let ifEnd = true;
+          dirs = shuffle(dirs);
+          for (let i = 0; i < 4; i++) {
+            let u = x + dirs[i][0] * 2,
+              v = y + dirs[i][1] * 2;
+            if (u < map.width * 2 + 1 && v < map.width * 2 + 1 && u >= 0 && v >= 0 && check[u][v]) {
+              ifEnd = false;
+              check[u][v] = false;
+              maps[x + dirs[i][0]][y + dirs[i][1]] = getRandomFloor();
+              if (u == map.width * 2 && v == map.height * 2) break;
+              dfs(u, v);
+            }
+          }
+          if (ifEnd) {
+            let chest = new PIXI.Sprite(tileTextures[81]);
+            chest.x = x * tileSize;
+            chest.y = y * tileSize;
+            chests.addChild(chest);
+          }
+        }
+        dfs(1, 1);
+
+        return maps;
+      }
+      function getRandomFloor() {
+        let x = Math.floor(Math.random() * 4);
+        let y = Math.floor(Math.random() * 3);
+        return 6 + y * 10 + x;
+      }
+      function setup(loader, resources) {
+        tileTextures = [];
+        for (let i = 0; i < 10 * 10; i++) {
+          let x = i % 10;
+          let y = Math.floor(i / 10);
+          tileTextures[i] = new PIXI.Texture(resources.tileset.texture, new PIXI.Rectangle(x * tileSize, y * tileSize, tileSize, tileSize));
+        }
+        let charTextures = [];
+        for (let i = 0; i < 7; i++) {
+          let x = i % 10;
+          let y = Math.floor(i / 10);
+          charTextures[i] = new PIXI.Texture(resources.character.texture, new PIXI.Rectangle(x * tileSize, y * tileSize, tileSize, tileSize));
+        }
+        character = new PIXI.Sprite(charTextures[5]);
+        character.x = tileSize * SCALE * 1.5;
+        character.y = tileSize * SCALE;
+        character.vx = 0;
+        character.anchor.x = 0.5;
+        character.anchor.y = 0.8;
+        character.vy = 0;
+        character.scale.x = character.scale.y = (SCALE * 3) / 5;
+        let scrollX = 0;
+        let scrollY = 0;
+        let maze = genMaze();
+        let floor = new PIXI.Container();
+        for (let y = 0; y < map.height * 2 + 1; y++) {
+          for (let x = 0; x < map.width * 2 + 1; x++) {
+            let sprite = new PIXI.Sprite(tileTextures[maze[y][x]]);
+            sprite.x = x * tileSize;
+            sprite.y = y * tileSize;
+            floor.addChild(sprite);
+          }
+        }
+        app.view.focus();
+
+        floor.scale.x = floor.scale.y = SCALE;
+        chests.scale.x = chests.scale.y = SCALE;
+        let kb = new Keyboard();
+        kb.watch(app.view);
+        app.stage.addChild(floor);
+        app.stage.addChild(character);
+        app.stage.addChild(chests);
+
+        function collision(x, y) {
+          let posx = Math.floor(x / SCALE / tileSize);
+          let posy = Math.floor(y / SCALE / tileSize);
+          return maze[posy][posx] == 2;
+        }
+        app.ticker.add((time) => {
+          if (!collision(character.x + character.vx, character.y)) {
+            character.x += character.vx;
+          }
+          if (!collision(character.x, character.y + character.vy)) {
+            character.y += character.vy;
+          }
+          if (character.vx > 0) {
+            character.vx -= speed / 2;
+          }
+          if (character.vx < 0) {
+            character.vx += speed / 2;
+          }
+          if (character.vy > 0) {
+            character.vy -= speed / 2;
+          }
+          if (character.vy < 0) {
+            character.vy += speed / 2;
+          }
+          app.stage.position.set(app.screen.width / 2, app.screen.height / 2);
+          app.stage.pivot.copy(character.position);
+          if (kb.pressed.ArrowRight || kb.pressed.d) {
+            character.vx = Math.min(maxSpeed, character.vx + speed);
+            if (character.scale.x < 0) character.scale.x *= -1;
+          }
+          if (kb.pressed.ArrowLeft || kb.pressed.a) {
+            character.vx = Math.max(-maxSpeed, character.vx - speed);
+            if (character.scale.x > 0) character.scale.x *= -1;
+          }
+          if (kb.pressed.ArrowUp || kb.pressed.w) {
+            character.vy = Math.max(-maxSpeed, character.vy - speed);
+          }
+          if (kb.pressed.ArrowDown || kb.pressed.s) {
+            character.vy = Math.min(maxSpeed, character.vy + speed);
+          }
+        });
+      }
+      app.loader.onError.add((error) => console.error(error));
+    </script>
+  </body>
+</html>
