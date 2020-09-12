@@ -5,7 +5,9 @@ socket.on("connect", (e) => {
   socket.on("gameData", (gameData) => {
     runPixi(gameData);
   });
-  console.log(socket.id);
+  socket.on("pong", (ms) => {
+    console.log("PING: ", ms);
+  });
 });
 
 function runPixi(gameData) {
